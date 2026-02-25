@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { auth } from "./lib/auth";
 
 export async function proxy(request: NextRequest) {
   try {
@@ -16,45 +17,40 @@ export async function proxy(request: NextRequest) {
         console.log(`[${timestamp}]🔓 Acceso público en ${pathname}`);
         return NextResponse.next();
       }
-    }
 
-    //validacion de token
-    const authHeader = request.headers.get("Authorization");
-    //En caso de no haber token:
-    if (!authHeader || !authHeader.startsWith("Bearer")) {
-      console.warn(
-        `[${timestamp}],⚠️Intento de acceso sin token en: ${pathname}`,
-      );
-
-      return NextResponse.json(
-        {
-          message: "TOKEN INCORRECTO PEDAZO DE BOBITO",
-        },
-        {
-          status: 401,
-        },
-      );
-    }
-    //Extraer el token
-
-    const token = authHeader.split(" ")[1];
-    if (token !== process.env.API_TOKEN) {
-      return NextResponse.json(
-        {
-          message: "ACCESO INVALIDO PEDAZO DE BOBITO: Token inválido",
-        },
-        {
-          status: 401,
-        },
+      const session = await auth.api.getSession({
+        headers: request.headers,
+      });
+      if (!session) {
+        console.warn(
+          `[${timestamp}]⚠️Intento de acceso sin sesión en: ${pathname}`,
+        );
+        return NextResponse.json(
+          {
+            message: "acceso denegado: No se ha iniciado sesión",
+          },
+          { status: 401 },
+        );
+      }
+      console.log(
+        `[${timestamp}]✅ Acceso autorizado para usuario: ${session.user.email} en ${pathname}`,
       );
     }
-    //Permite continuar ejecución
+
     return NextResponse.next();
   } catch (error) {
     console.error(error);
+    return NextResponse.json(
+      { message: "Internal Server Error" },
+      { status: 500 },
+    );
   }
 }
+
 export const config = {
   //propiedad matcher para sólo permitir funcion proxy en rutas permitidas (/students)
-  matcher: ["/api/v1/students"],
+  matcher: [
+    "/api/v1/students",
+    "/api/v1/students/:path*"
+  ],
 };
